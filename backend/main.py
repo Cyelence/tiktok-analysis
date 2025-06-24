@@ -1,11 +1,15 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
 import uvicorn
 from loguru import logger
 
 from app.core.config import settings
-from app.models.database import create_tables
+from app.core.database import get_db, create_tables
+from app.models.video import TikTokVideo
+from app.models.fashion import FashionItem, BrandData, StyleData
+from app.models.trends import TrendMetrics
 
 # Create FastAPI app
 app = FastAPI(
@@ -36,9 +40,48 @@ async def health_check():
         "version": settings.version
     }
 
+# Database test endpoint
+@app.get("/api/v1/db-test")
+async def test_database(db: Session = Depends(get_db)):
+    """Test database connection and basic operations"""
+    try:
+        # Test database connection
+        db.execute("SELECT 1")
+        
+        # Test model creation
+        test_video = TikTokVideo(
+            tiktok_id="test_123",
+            author="test_author",
+            author_id="test_author_id",
+            caption="Test video caption",
+            hashtags=["#fashion", "#test"],
+            view_count=1000,
+            like_count=100,
+            comment_count=10,
+            share_count=5,
+            is_fashion_related=True
+        )
+        
+        db.add(test_video)
+        db.commit()
+        db.refresh(test_video)
+        
+        # Clean up test data
+        db.delete(test_video)
+        db.commit()
+        
+        return {
+            "status": "success",
+            "message": "Database connection and operations working correctly",
+            "test_video_id": test_video.id
+        }
+    except Exception as e:
+        logger.error(f"Database test failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Database test failed: {str(e)}")
+
 # Basic API endpoints for MVP
 @app.get("/api/v1/trends")
-async def get_trends():
+async def get_trends(db: Session = Depends(get_db)):
     """Get current fashion trends - MVP placeholder"""
     return {
         "trends": [
@@ -62,7 +105,7 @@ async def get_trends():
     }
 
 @app.get("/api/v1/brands")
-async def get_brands():
+async def get_brands(db: Session = Depends(get_db)):
     """Get trending brands - MVP placeholder"""
     return {
         "brands": [
@@ -84,7 +127,7 @@ async def get_brands():
     }
 
 @app.get("/api/v1/styles")
-async def get_styles():
+async def get_styles(db: Session = Depends(get_db)):
     """Get trending styles - MVP placeholder"""
     return {
         "styles": [
